@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Keberadaan Staf SK Krangan</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Awesome untuk Ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Mengoptimumkan paparan cetakan laporan bulanan agar muat di kertas A4 secara menegak */
+        @media print {
+            body {
+                background: white;
+                color: black;
+                padding: 0;
+                margin: 0;
+            }
+            /* Sembunyikan elemen navigasi dan butang semasa mencetak */
+            header, nav, .no-print, button, .filter-section {
+                display: none !important;
+            }
+            /* Hilangkan bayang, border, dan padding berlebihan */
+            .print-layout {
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            /* Benarkan jadual pecah secara semula jadi di antara mukasurat */
+            table {
+                page-break-inside: auto !important;
+                break-inside: auto !important;
+                width: 100% !important;
+            }
+            /* Elakkan sel tunggal dalam baris daripada terpotong melintang */
+            tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            thead {
+                display: table-header-group !important; /* Ulang kepala jadual jika melimpah ke ms2 */
+            }
+            /* Kecilkan padding sel jadual semasa cetakan untuk jimat ruang */
+            th, td {
+                padding: 6px 8px !important;
+            }
+            /* Tetapan Saiz Halaman A4 secara spesifik */
+            @page {
+                size: A4 portrait;
+                margin: 12mm 12mm 12mm 12mm;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 transition-colors duration-300">
+
+    <!-- Pengepala Rasmi dengan Logo Sekolah -->
+    <header class="bg-slate-900 text-white shadow-xl border-b-4 border-blue-600 no-print">
+        <div class="max-w-7xl mx-auto px-4 py-5 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <!-- Rujukan imej logo.png bersebelahan dengan tajuk sekolah -->
+                <img src="logo.png" alt="Logo SK Krangan" class="h-16 w-auto object-contain drop-shadow" onerror="this.src='https://placehold.co/150x150/1e293b/ffffff?text=SK+Krangan'">
+                <div>
+                    <h1 class="text-2xl font-extrabold tracking-tight">PORTAL KEBERADAAN STAF</h1>
+                    <p class="text-xs text-blue-400 font-semibold uppercase tracking-wider">SK Krangan Serian &bull; <span class="italic text-slate-300">"Ke Arah Masyarakat Berilmu"</span></p>
+                </div>
+            </div>
+            
+            <!-- Paparan Masa & Tarikh Dinamik -->
+            <div class="bg-slate-800/80 border border-slate-700 rounded-xl px-5 py-2.5 text-right flex flex-col items-center md:items-end min-w-[200px]">
+                <div id="live-date" class="text-xs font-semibold text-blue-400">Memuatkan tarikh...</div>
+                <div id="live-time" class="text-2xl font-black tracking-widest text-white mt-0.5">00:00:00 AM</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigasi Tab Utama -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm no-print">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex space-x-1 sm:space-x-4">
+                <button onclick="switchTab('dashboard')" id="btn-dashboard" class="py-4 px-3 sm:px-5 font-bold text-sm border-b-4 border-blue-600 text-blue-600 flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-gauge-high"></i> Dashboard Utama
+                </button>
+                <button onclick="switchTab('rekod')" id="btn-rekod" class="py-4 px-3 sm:px-5 font-semibold text-sm border-b-4 border-transparent text-slate-500 hover:text-blue-600 hover:border-slate-300 flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-folder-open"></i> Rekod
+                </button>
+                <button onclick="switchTab('laporan')" id="btn-laporan" class="py-4 px-3 sm:px-5 font-semibold text-sm border-b-4 border-transparent text-slate-500 hover:text-blue-600 hover:border-slate-300 flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-file-invoice"></i> Laporan Bulanan Bercetak
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Kandungan Tab -->
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- ==================== TAB 1: DASHBOARD UTAMA ==================== -->
+        <div id="tab-dashboard" class="tab-content active space-y-8">
+            
+            <!-- Bahagian Pengenalan & Carian Cepat Staf -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm no-print">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Kemaskini Keberadaan Harian</h2>
+                    <p class="text-sm text-slate-500">Sila pilih status keberadaan anda hari ini dan klik butang hantar.</p>
+                </div>
+                <div class="relative w-full md:w-80">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </span>
+                    <input type="text" id="dashboard-search" onkeyup="filterDashboardStaff()" placeholder="Cari nama staf..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all shadow-sm">
+                </div>
+            </div>
+
+            <!-- Kad Statistik Ringkas Sehari -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 no-print">
+                <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 shadow-sm flex items-center gap-4">
+                    <div class="p-4 bg-emerald-600 text-white rounded-2xl">
+                        <i class="fa-solid fa-school text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Di Sekolah</p>
+                        <p class="text-3xl font-black text-slate-900 mt-0.5" id="count-school">0</p>
+                    </div>
+                </div>
+                <div class="bg-amber-50 border border-amber-100 rounded-2xl p-6 shadow-sm flex items-center gap-4">
+                    <div class="p-4 bg-amber-500 text-white rounded-2xl">
+                        <i class="fa-solid fa-plane-departure text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-amber-700 uppercase tracking-wider">Luar Pejabat</p>
+                        <p class="text-3xl font-black text-slate-900 mt-0.5" id="count-outside">0</p>
+                    </div>
+                </div>
+                <div class="bg-rose-50 border border-rose-100 rounded-2xl p-6 shadow-sm flex items-center gap-4">
+                    <div class="p-4 bg-rose-600 text-white rounded-2xl">
+                        <i class="fa-solid fa-calendar-times text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-rose-700 uppercase tracking-wider">Cuti / Lain-lain</p>
+                        <p class="text-3xl font-black text-slate-900 mt-0.5" id="count-leave">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid Kad Kakitangan (Disusun Dinamik melalui JS) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" id="staff-grid">
+                <!-- Dijana Dinamik Menerusi JS -->
+            </div>
+
+            <!-- Graf & Rumusan Visual Semasa -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4 no-print">
+                <!-- Jadual Ringkasan -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-900 border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-blue-600"></i> Ringkasan Keberadaan Staf
+                        </h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between items-center py-1">
+                                <span class="text-slate-600 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span> Di Sekolah</span>
+                                <span class="font-bold text-slate-950" id="stat-school">0</span>
+                            </div>
+                            <div class="flex justify-between items-center py-1">
+                                <span class="text-slate-600 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span> Di Sekolah : Mesy/Bengkel</span>
+                                <span class="font-bold text-slate-950" id="stat-school-mesy">0</span>
+                            </div>
+                            <div class="flex justify-between items-center py-1">
+                                <span class="text-slate-600 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span> Luar Pejabat : Urusan Rasmi</span>
+                                <span class="font-bold text-slate-950" id="stat-outside-rasmi">0</span>
+                            </div>
+                            <div class="flex justify-between items-center py-1">
+                                <span class="text-slate-600 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span> Luar Pejabat : Urusan Peribadi</span>
+                                <span class="font-bold text-slate-950" id="stat-outside-peribadi">0</span>
+                            </div>
+                            <div class="flex justify-between items-center py-1">
+                                <span class="text-slate-600 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-rose-600"></span> Cuti Rehat</span>
+                                <span class="font-bold text-slate-950" id="stat-cuti-rehat">0</span>
+                            </div>
+                            <div class="flex justify-between items-center py-1">
+                                <span class="text-slate-600 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-rose-400"></span> Cuti : Lain-lain</span>
+                                <span class="font-bold text-slate-950" id="stat-cuti-lain">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Carta Bar Visual -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2">
+                    <h3 class="font-bold text-slate-900 border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-simple text-blue-600"></i> Analisis Graf Semasa
+                    </h3>
+                    <div class="h-60 relative">
+                        <canvas id="summaryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 2: ARKIB REKOD ==================== -->
+        <div id="tab-rekod" class="tab-content space-y-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-100">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-900">Arkib Log Keberadaan</h2>
+                        <p class="text-sm text-slate-500">Senarai log perubahan yang ditarik dari Google Sheets.</p>
+                    </div>
+                    <button onclick="fetchRecords()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-sm transition-all">
+                        <i class="fa-solid fa-sync"></i> Muat Semula Data
+                    </button>
+                </div>
+
+                <!-- Saringan (Filter) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Cari Nama Staf</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </span>
+                            <input type="text" id="filter-name" onkeyup="applyFilters()" placeholder="Taip nama di sini..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Pilih Tarikh Rekod</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-calendar"></i>
+                            </span>
+                            <input type="date" id="filter-date" onchange="applyFilters()" class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-600">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Jadual Rekod -->
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th class="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Tarikh Log</th>
+                                <th class="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Staf</th>
+                                <th class="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status Diisytihar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="records-body" class="divide-y divide-slate-100 text-sm">
+                            <tr>
+                                <td colspan="3" class="p-8 text-center text-slate-400 font-medium">
+                                    <i class="fa-solid fa-download text-xl mb-2 block"></i> Sila tekan butang "Muat Semula Data" untuk mengambil rekod dari Sheets.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 3: LAPORAN BULANAN ==================== -->
+        <div id="tab-laporan" class="tab-content space-y-6">
+            
+            <!-- Bahagian Cetak Dokumen / Tetapan Bulan -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm no-print">
+                <h2 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-gears text-blue-600"></i> Tetapan Laporan Bulanan
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Pilih Bulan & Tahun</label>
+                        <input type="month" id="report-month" class="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm text-slate-600">
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="generateMonthlyReport()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all">
+                            <i class="fa-solid fa-chart-line"></i> Jana Laporan
+                        </button>
+                        <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm transition-all">
+                            <i class="fa-solid fa-print"></i> Cetak / Simpan PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Templat Laporan Bulanan Format A4 -->
+            <div class="bg-white p-8 md:p-12 rounded-2xl border border-slate-200 shadow-lg max-w-4xl mx-auto print-layout space-y-8">
+                
+                <!-- Kepala Surat Laporan Rasmi -->
+                <div class="flex items-center justify-between border-b-2 border-slate-900 pb-5">
+                    <div class="flex items-center gap-5">
+                        <img src="logo.png" alt="Logo SK Krangan" class="h-16 w-auto object-contain" onerror="this.src='https://placehold.co/150x150/1e293b/ffffff?text=SK+Krangan'">
+                        <div>
+                            <h3 class="text-lg font-extrabold text-slate-950">SEKOLAH KEBANGSAAN KRANGAN</h3>
+                            <p class="text-xs text-slate-600 font-medium">Serian, Sarawak, Malaysia</p>
+                            <p class="text-xs text-slate-500">Kod Sekolah: YBB8240 &bull; Emel: ybb8240@moe.edu.my</p>
+                        </div>
+                    </div>
+                    <div class="text-right text-xs text-slate-500 font-semibold uppercase">
+                        <div>Dokumen Rasmi</div>
+                        <div class="text-slate-950 font-bold" id="report-meta-month">Bulan: -</div>
+                    </div>
+                </div>
+
+                <!-- Tajuk Utama Laporan -->
+                <div class="text-center">
+                    <h2 class="text-xl font-bold text-slate-950 tracking-wide uppercase">LAPORAN BULANAN KEBERADAAN BARISAN PENTADBIR & GURU</h2>
+                    <p class="text-sm text-slate-500 mt-1">Sistem Pengesahan & Rekod Kehadiran Atas Talian</p>
+                </div>
+
+                <!-- Helaian Kandungan Jadual Laporan Bulanan -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border border-slate-300 border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 border-b border-slate-300 text-slate-800 font-bold text-[10px] uppercase">
+                                <th class="p-2 border-r border-slate-300 text-center w-8">ID</th>
+                                <th class="p-2 border-r border-slate-300">Nama Pentadbir & Guru</th>
+                                <th class="p-2 border-r border-slate-300 text-center">Di Sekolah</th>
+                                <th class="p-2 border-r border-slate-300 text-center">Mesy/Bengkel</th>
+                                <th class="p-2 border-r border-slate-300 text-center">Urusan Rasmi (Luar)</th>
+                                <th class="p-2 border-r border-slate-300 text-center">Urusan Peribadi (Luar)</th>
+                                <th class="p-2 border-r border-slate-300 text-center">Cuti Rehat</th>
+                                <th class="p-2 text-center">Cuti Lain</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthly-report-table-body" class="divide-y divide-slate-300 text-[11px] text-slate-900 font-medium">
+                            <!-- Paparan default sebelum dijana -->
+                            <tr>
+                                <td colspan="8" class="p-8 text-center text-slate-400 italic">
+                                    Sila pilih bulan di bahagian atas dan tekan butang "Jana Laporan".
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Bahagian Tandatangan / Kelulusan Guru Besar SK Krangan -->
+                <div class="flex justify-end pt-6 text-xs">
+                    <div class="w-64">
+                        <p class="text-slate-500 font-semibold uppercase tracking-wider text-left">Disahkan & Diluluskan Oleh:</p>
+                        <div class="mt-14 border-t border-slate-400 pt-2 text-left">
+                            <p class="font-bold text-slate-950 uppercase">Stanley anak Ngawah</p>
+                            <p class="text-slate-500">Guru Besar, SK Krangan</p>
+                            <p class="text-slate-400 text-[10px] mt-1">Tarikh Pengesahan: ........................</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Sistem Notifikasi Toast Interaktif Terapung -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none no-print"></div>
+
+    <script>
+        // URL Google Apps Script yang dibekalkan oleh pengguna
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCubmogvZCIYx4GDaZUmzHDoIPu2bhq-5DZTam93DSNkRP9EA7lC5aopSwHjJ0B4wWXg/exec";
+
+        // Senarai Rasmi Kakitangan SK Krangan (15 Orang - 4 Pentadbir, 9 Guru & 2 Kakitangan Sokongan)
+        let staffData = [
+            { id: 1, name: 'Stanley anak Ngawah', position: 'Guru Besar SK Krangan', status: 'Di Sekolah' },
+            { id: 2, name: 'Dick Lester anak Bakir', position: 'Guru Penolong Kanan Kurikulum', status: 'Di Sekolah' },
+            { id: 3, name: 'Amir bin Ngatiman', position: 'Guru Penolong Kanan Hal Ehwal Murid', status: 'Di Sekolah' },
+            { id: 4, name: 'Mohammad Fadzly bin Noor Azman', position: 'Guru Penolong Kanan Kokurikulum', status: 'Di Sekolah' },
+            { id: 5, name: 'Angeline anak Michael Jawa', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 6, name: 'Marina anak Luat', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 7, name: 'Jeanica May anak Kuyah', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 8, name: 'Noor Izzati Abdullah', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 9, name: 'Hadijah anak Ambun', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 10, name: 'Mohd Arfiq Rahimi bin Abdul Rahman', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 11, name: 'Elnisia anak Guwel', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 12, name: 'Aimuni Athirah binti Latif', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 13, name: 'Nur Syuhada binti Abdul Razak', position: 'Guru Akademik', status: 'Di Sekolah' },
+            { id: 14, name: 'Liminang anak Sabang', position: 'Pembantu Tadbir', status: 'Di Sekolah' },
+            { id: 15, name: 'Ajek anak Sumping', position: 'Pembantu Pengurusan Murid Prasekolah', status: 'Di Sekolah' }
+        ];
+
+        // Pilihan status rasmi dalam dropdown
+        const statusOptions = [
+            'Di Sekolah',
+            'Di Sekolah : Mesy/Bengkel',
+            'Luar Pejabat : Urusan Rasmi',
+            'Luar Pejabat : Urusan Peribadi',
+            'Cuti Rehat',
+            'Cuti : Lain-lain'
+        ];
+
+        // Memori global log rekod kehadiran dari Google Sheets
+        let allRecords = [];
+        let summaryChartInstance = null;
+
+        // Fungsi Memaparkan Notifikasi Toast (Menggantikan Alert Tradisional)
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl text-white font-semibold text-sm transition-all transform translate-y-5 opacity-0 pointer-events-auto min-w-[280px] max-w-sm ${
+                type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-amber-500'
+            }`;
+            
+            const icon = type === 'success' ? 'circle-check' : type === 'error' ? 'triangle-exclamation' : 'circle-exclamation';
+            toast.innerHTML = `
+                <i class="fa-solid fa-${icon} text-lg"></i>
+                <div class="flex-1">${message}</div>
+                <button onclick="this.parentElement.remove()" class="text-white/80 hover:text-white transition-all"><i class="fa-solid fa-xmark"></i></button>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Animasi masuk
+            setTimeout(() => {
+                toast.classList.remove('translate-y-5', 'opacity-0');
+            }, 10);
+            
+            // Buang automatik selepas 4 saat
+            setTimeout(() => {
+                toast.classList.add('translate-y-5', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Fungsi Mengemas Kini Jam & Tarikh
+        function updateClock() {
+            const now = new Date();
+            const dateOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+            document.getElementById('live-date').innerText = now.toLocaleDateString('ms-MY', dateOptions);
+            document.getElementById('live-time').innerText = now.toLocaleTimeString('ms-MY', { hour12: true });
+        }
+
+        // Fungsi Menukar Tab Navigasi
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            
+            // Kemaskini Gaya Tab Aktif / Tidak Aktif
+            const tabs = ['dashboard', 'rekod', 'laporan'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`btn-${t}`);
+                if (t === tabId) {
+                    btn.className = "py-4 px-3 sm:px-5 font-bold text-sm border-b-4 border-blue-600 text-blue-600 flex items-center gap-2 transition-all";
+                } else {
+                    btn.className = "py-4 px-3 sm:px-5 font-semibold text-sm border-b-4 border-transparent text-slate-500 hover:text-blue-600 hover:border-slate-300 flex items-center gap-2 transition-all";
+                }
+            });
+        }
+
+        // Fungsi Menghasilkan Kad Staf di Dashboard secara Dinamik
+        function renderDashboard() {
+            const grid = document.getElementById('staff-grid');
+            grid.innerHTML = staffData.map(s => `
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-all flex flex-col justify-between gap-4 relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-2 h-full ${
+                        s.status.includes('Di Sekolah') ? 'bg-emerald-500' : s.status.includes('Luar') ? 'bg-amber-500' : 'bg-rose-500'
+                    }"></div>
+                    <div>
+                        <h4 class="font-extrabold text-slate-900 group-hover:text-blue-600 transition-colors">${s.name}</h4>
+                        <p class="text-xs text-blue-600 font-bold tracking-wider mt-1 uppercase">${s.position}</p>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Status Semasa</label>
+                            <select id="select-status-${s.id}" onchange="changeLocalStatus(${s.id}, this.value)" class="w-full text-xs font-semibold p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all">
+                                ${statusOptions.map(opt => `<option value="${opt}" ${s.status === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button id="btn-submit-${s.id}" onclick="submitStatus(${s.id}, '${s.name}')" class="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Hantar Status
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+            updateLocalStats();
+        }
+
+        // Fungsi Menukar Status Tempatan (Local State)
+        function changeLocalStatus(id, newStatus) {
+            const staff = staffData.find(s => s.id === id);
+            if (staff) {
+                staff.status = newStatus;
+                updateLocalStats();
+            }
+        }
+
+        // Mengemas Kini Statistik pada Dashboard Utama
+        function updateLocalStats() {
+            let school = 0;
+            let outside = 0;
+            let leave = 0;
+            
+            let countSchool = 0;
+            let countSchoolMesy = 0;
+            let countOutsideRasmi = 0;
+            let countOutsidePeribadi = 0;
+            let countCutiRehat = 0;
+            let countCutiLain = 0;
+
+            staffData.forEach(s => {
+                if (s.status === 'Di Sekolah') {
+                    school++;
+                    countSchool++;
+                } else if (s.status === 'Di Sekolah : Mesy/Bengkel') {
+                    school++;
+                    countSchoolMesy++;
+                } else if (s.status === 'Luar Pejabat : Urusan Rasmi') {
+                    outside++;
+                    countOutsideRasmi++;
+                } else if (s.status === 'Luar Pejabat : Urusan Peribadi') {
+                    outside++;
+                    countOutsidePeribadi++;
+                } else if (s.status === 'Cuti Rehat') {
+                    leave++;
+                    countCutiRehat++;
+                } else if (s.status === 'Cuti : Lain-lain') {
+                    leave++;
+                    countCutiLain++;
+                }
+            });
+
+            // Set Jumlah Kad
+            document.getElementById('count-school').innerText = school;
+            document.getElementById('count-outside').innerText = outside;
+            document.getElementById('count-leave').innerText = leave;
+
+            // Set Jadual Perincian Ringkasan
+            document.getElementById('stat-school').innerText = countSchool;
+            document.getElementById('stat-school-mesy').innerText = countSchoolMesy;
+            document.getElementById('stat-outside-rasmi').innerText = countOutsideRasmi;
+            document.getElementById('stat-outside-peribadi').innerText = countOutsidePeribadi;
+            document.getElementById('stat-cuti-rehat').innerText = countCutiRehat;
+            document.getElementById('stat-cuti-lain').innerText = countCutiLain;
+
+            // Kemaskini Grafik Bar
+            if (summaryChartInstance) {
+                summaryChartInstance.data.datasets[0].data = [
+                    countSchool,
+                    countSchoolMesy,
+                    countOutsideRasmi,
+                    countOutsidePeribadi,
+                    countCutiRehat,
+                    countCutiLain
+                ];
+                summaryChartInstance.update();
+            }
+        }
+
+        // Fungsi Menghantar & Mengunci Status ke Google Sheets
+        async function submitStatus(id, staffName) {
+            const btn = document.getElementById(`btn-submit-${id}`);
+            const select = document.getElementById(`select-status-${id}`);
+            const selectedStatus = select.value;
+            
+            // Simpan status asal sekiranya ralat berlaku
+            const originalText = btn.innerHTML;
+            
+            // Aktifkan Sekatan Butang (Disable)
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch animate-spin"></i> Mengunci...`;
+            btn.className = "w-full bg-slate-400 text-slate-700 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-not-allowed";
+
+            try {
+                // Post Data ke Google Web App
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Penting untuk mengelakkan ralat silang domain (CORS)
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: id,
+                        name: staffName,
+                        status: selectedStatus
+                    })
+                });
+
+                // Paparkan Status Kejayaan
+                showToast(`Status ${staffName} telah selamat dikunci ke Google Sheets!`, 'success');
+                btn.innerHTML = `<i class="fa-solid fa-circle-check"></i> Sukses!`;
+                btn.className = "w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2";
+
+                // Muat Semula Data Arkib secara Automatik di Latar Belakang
+                setTimeout(() => {
+                    fetchRecordsQuietly();
+                }, 1000);
+
+            } catch (err) {
+                console.error("Isu sambungan Apps Script:", err);
+                showToast("Penyambungan gagal. Sila semak pautan Google Apps Script anda.", "error");
+                btn.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Gagal`;
+                btn.className = "w-full bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2";
+            } finally {
+                // Aktifkan butang semula selepas 2 saat
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    btn.className = "w-full bg-slate-900 hover:bg-blue-600 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm";
+                }, 2000);
+            }
+        }
+
+        // Carian pantas nama staf di Dashboard
+        function filterDashboardStaff() {
+            const query = document.getElementById('dashboard-search').value.toLowerCase();
+            const cards = document.getElementById('staff-grid').children;
+            
+            for (let card of cards) {
+                const name = card.querySelector('h4').innerText.toLowerCase();
+                if (name.includes(query)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            }
+        }
+
+        // Fungsi Membaca Log Rekod dari Google Sheets
+        async function fetchRecords() {
+            showToast("Sila tunggu. Sedang menarik rekod dari Sheets...", "info");
+            const tbody = document.getElementById('records-body');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="p-8 text-center text-slate-500 font-semibold">
+                        <i class="fa-solid fa-circle-notch animate-spin text-2xl text-blue-600 mb-2 block"></i> Memuatkan data semasa...
+                    </td>
+                </tr>
+            `;
+
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                if (!response.ok) throw new Error("Gagal menyambung.");
+                
+                const data = await response.json();
+                
+                // Susun rekod terbaharu di bahagian atas
+                allRecords = data.reverse();
+                applyFilters();
+                showToast("Rekod arkib berjaya dimuat turun dari Google Sheets!", "success");
+
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="p-8 text-center text-rose-600 font-bold">
+                            <i class="fa-solid fa-circle-exclamation text-xl mb-2 block"></i> Gagal mendapatkan data. Sila pastikan Google Apps Script anda dipasang (deployed) dengan betul.
+                        </td>
+                    </tr>
+                `;
+                showToast("Gagal mengambil rekod dari Google Sheets.", "error");
+            }
+        }
+
+        // Fungsi Senyap Mengambil Data Tanpa Mengganggu UI Pengguna (Background Fetch)
+        async function fetchRecordsQuietly() {
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                if (response.ok) {
+                    const data = await response.json();
+                    allRecords = data.reverse();
+                    applyFilters();
+                }
+            } catch (e) {
+                console.warn("Latar belakang gagal menyegerakan rekod:", e);
+            }
+        }
+
+        // Fungsi Menggunakan Penapis Carian Arkib
+        function applyFilters() {
+            const filterName = document.getElementById('filter-name').value.toLowerCase();
+            const filterDate = document.getElementById('filter-date').value;
+            const tbody = document.getElementById('records-body');
+
+            if (allRecords.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="p-8 text-center text-slate-400 font-medium">Tiada rekod tersimpan di Google Sheets.</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // Saring mengikut nama & tarikh
+            const filtered = allRecords.filter(r => {
+                const matchName = r.name.toLowerCase().includes(filterName);
+                
+                let matchDate = true;
+                if (filterDate) {
+                    // Penukaran tarikh Google Sheets kepada YYYY-MM-DD
+                    const [day, month, year] = r.date.split('/');
+                    const formattedRecordDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    matchDate = (formattedRecordDate === filterDate);
+                }
+                
+                return matchName && matchDate;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="p-8 text-center text-slate-400 font-medium">Tiada rekod yang sepadan dengan carian anda.</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(r => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-4 text-slate-600 font-medium">${r.date}</td>
+                    <td class="p-4 text-slate-900 font-extrabold">${r.name}</td>
+                    <td class="p-4">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
+                            r.status.includes('Di Sekolah') 
+                                ? 'bg-emerald-100 text-emerald-800' 
+                                : r.status.includes('Luar') 
+                                    ? 'bg-amber-100 text-amber-800' 
+                                    : 'bg-rose-100 text-rose-800'
+                        }">
+                            <span class="h-1.5 w-1.5 rounded-full ${
+                                r.status.includes('Di Sekolah') ? 'bg-emerald-600' : r.status.includes('Luar') ? 'bg-amber-500' : 'bg-rose-600'
+                            }"></span>
+                            ${r.status}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Fungsi Membina Laporan Keberadaan Bulanan
+        function generateMonthlyReport() {
+            const selectMonth = document.getElementById('report-month').value;
+            if (!selectMonth) {
+                showToast("Sila pilih Bulan dan Tahun terlebih dahulu!", "warning");
+                return;
+            }
+
+            const [yearFilter, monthFilter] = selectMonth.split('-');
+            const monthNames = ["Januari", "Februari", "Mac", "April", "Mei", "Jun", "Julai", "Ogos", "September", "Oktober", "November", "Disember"];
+            const selectedMonthName = monthNames[parseInt(monthFilter) - 1];
+
+            // Papar Meta Maklumat Bulan pada Laporan
+            document.getElementById('report-meta-month').innerText = `Bulan: ${selectedMonthName} ${yearFilter}`;
+
+            const tbody = document.getElementById('monthly-report-table-body');
+
+            if (allRecords.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="p-8 text-center text-rose-600 font-semibold italic">
+                            Sila pastikan anda telah memuat turun rekod dari tab "Arkib Rekod (Sheets)" terlebih dahulu.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // Isih log mengikut bulan & tahun yang ditapis
+            const monthlyData = allRecords.filter(r => {
+                const [day, month, year] = r.date.split('/');
+                return (month.padStart(2, '0') === monthFilter && year === yearFilter);
+            });
+
+            // Isikan kiraan kehadiran bulanan bagi kesemua 15 orang staf
+            let reportHTML = '';
+
+            staffData.forEach(staff => {
+                // Tapis log khas bagi kakitangan ini
+                const staffLogs = monthlyData.filter(r => r.name === staff.name);
+
+                let countSchool = 0;
+                let countMesy = 0;
+                let countLuarRasmi = 0;
+                let countLuarPeribadi = 0;
+                let countCutiRehat = 0;
+                let countCutiLain = 0;
+
+                staffLogs.forEach(log => {
+                    if (log.status === 'Di Sekolah') countSchool++;
+                    else if (log.status === 'Di Sekolah : Mesy/Bengkel') countMesy++;
+                    else if (log.status === 'Luar Pejabat : Urusan Rasmi') countLuarRasmi++;
+                    else if (log.status === 'Luar Pejabat : Urusan Peribadi') countLuarPeribadi++;
+                    else if (log.status === 'Cuti Rehat') countCutiRehat++;
+                    else if (log.status === 'Cuti : Lain-lain') countCutiLain++;
+                });
+
+                reportHTML += `
+                    <tr class="hover:bg-slate-50 border-b border-slate-200">
+                        <td class="p-2 border-r border-slate-300 text-slate-500 font-bold text-center">${staff.id}</td>
+                        <td class="p-2 border-r border-slate-300 font-extrabold text-slate-900">${staff.name}<br><span class="text-[9px] text-blue-600 uppercase font-semibold">${staff.position}</span></td>
+                        <td class="p-2 border-r border-slate-300 text-center font-bold text-emerald-600">${countSchool} hari</td>
+                        <td class="p-2 border-r border-slate-300 text-center font-bold text-emerald-500">${countMesy} hari</td>
+                        <td class="p-2 border-r border-slate-300 text-center font-bold text-amber-600">${countLuarRasmi} hari</td>
+                        <td class="p-2 border-r border-slate-300 text-center font-bold text-amber-500">${countLuarPeribadi} hari</td>
+                        <td class="p-2 border-r border-slate-300 text-center font-bold text-rose-600">${countCutiRehat} hari</td>
+                        <td class="p-2 text-center font-bold text-rose-500">${countCutiLain} hari</td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = reportHTML;
+            showToast(`Laporan bagi bulan ${selectedMonthName} ${yearFilter} berjaya dijana!`, 'success');
+        }
+
+        // Melakar Dan Menguruskan Grafik Visual Chart.js
+        function initChart() {
+            const ctx = document.getElementById('summaryChart').getContext('2d');
+            
+            // Konfigurasi Asal Graf Bar Semasa
+            summaryChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Di Sekolah', 'Mesy/Bengkel', 'Urusan Rasmi', 'Urusan Peribadi', 'Cuti Rehat', 'Cuti Lain'],
+                    datasets: [{
+                        label: 'Bilangan Pentadbir & Guru',
+                        data: [0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#10b981', // emerald-500
+                            '#34d399', // emerald-400
+                            '#f59e0b', // amber-500
+                            '#fbbf24', // amber-400
+                            '#e11d48', // rose-600
+                            '#f43f5e'  // rose-500
+                        ],
+                        borderWidth: 0,
+                        borderRadius: 8,
+                        barThickness: 28
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                font: {
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: '#f1f5f9'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                font: {
+                                    weight: 'bold',
+                                    size: 10
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            updateLocalStats();
+        }
+
+        // Jalankan Semasa Permulaan Laman Web Dimuatkan
+        window.onload = function() {
+            // Jalankan Jam Dinamik
+            setInterval(updateClock, 1000);
+            updateClock();
+            
+            // Tetapkan bulan semasa ke dalam filter penjana laporan bulanan
+            const today = new Date();
+            const currentYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('report-month').value = currentYearMonth;
+            
+            // Jana Elemen Dashboard & Grafik
+            renderDashboard();
+            initChart();
+            
+            // Tarik data pangkalan secara senyap pada fasa awal permulaan portal
+            fetchRecordsQuietly();
+        };
+    </script>
+</body>
+</html>
